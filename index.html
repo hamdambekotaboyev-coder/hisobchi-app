@@ -65,7 +65,8 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 const d = decode();
 const app = document.getElementById("app");
 if (!d) {
-  app.innerHTML = '<div class="empty">Ma\'lumot topilmadi.<br>Botdagi "📱 Ilovada ochish" tugmasi orqali kiring.</div>';
+  app.innerHTML = '<div class="empty">Ma\'lumot topilmadi.<br>Botdagi "📱 Ilovada ochish" tugmasi orqali kiring.'
+    + '<br><small style="opacity:.5">v3 · q' + location.search.length + ' · h' + location.hash.length + '</small></div>';
 } else {
   const left = d.i - d.e;
   const diff = d.p ? Math.round((d.e - d.p) * 100 / d.p) : null;
