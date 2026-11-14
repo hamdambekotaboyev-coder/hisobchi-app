@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shaxsiy Hisobchi</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #0f172a);
+    --card: var(--tg-theme-secondary-bg-color, #1e293b);
+    --fg: var(--tg-theme-text-color, #f8fafc);
+    --muted: var(--tg-theme-hint-color, #94a3b8);
+    --accent: var(--tg-theme-button-color, #10b981);
+    --green: #10b981; --red: #ef4444; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { background: var(--card); border-radius: 14px; padding: 12px 10px; }
+  .kpi .l { color: var(--muted); font-size: 12px; }
+  .kpi .v { font-size: 17px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .row .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .a { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .track { height: 6px; background: rgba(148,163,184,.2); border-radius: 3px; margin: 2px 0 0 20px; }
+  .fill { height: 100%; border-radius: 3px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .donut { position: relative; height: 220px; }
+  .center { position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: none; }
+  .center b { font-size: 20px; } .center span { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const COLORS = ["#10B981","#F59E0B","#3B82F6","#EF4444","#8B5CF6","#EC4899","#14B8A6","#64748B"];
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+function decode() {
+  try {
+    let s = location.hash.slice(1).replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const bytes = Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (e) { return null; }
+}
+const fmt = n => Math.round(n).toLocaleString("ru-RU").replace(/,/g, " ") + " so'm";
+const short = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace(".0", "") + " mln" : n >= 1e3 ? Math.round(n / 1e3) + " ming" : String(Math.round(n));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const d = decode();
+const app = document.getElementById("app");
+if (!d) {
+  app.innerHTML = '<div class="empty">Ma\'lumot topilmadi.<br>Botdagi "📱 Ilovada ochish" tugmasi orqali kiring.</div>';
+} else {
+  const left = d.i - d.e;
+  const diff = d.p ? Math.round((d.e - d.p) * 100 / d.p) : null;
+  const top = d.c.length ? d.c[0][0] : null;
+  app.innerHTML = `
+    <h1>📊 ${d.t}</h1>
+    <div class="sub">1$ = ${fmt(d.r)} · Markaziy bank kursi</div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">🟢 Kirim</div><div class="v">${short(d.i)}</div></div>
+      <div class="kpi"><div class="l">🔴 Chiqim</div><div class="v">${short(d.e)}</div></div>
+      <div class="kpi"><div class="l">${left >= 0 ? "💰" : "⚠️"} Qoldiq</div>
+        <div class="v" style="color:${left >= 0 ? "var(--green)" : "var(--red)"}">${short(left)}</div></div>
+    </div>
+    <div class="card">
+      <h2>Xarajatlar toifalar bo'yicha</h2>
+      ${d.c.length ? `<div class="donut"><canvas id="pie"></canvas>
+        <div class="center"><b>${short(d.e)}</b><span>so'm chiqim</span></div></div>
+        <div id="cats"></div>` : '<div class="note">Bu davrda xarajat yo\'q.</div>'}
+    </div>
+    <div class="card"><h2>Kunlik xarajat</h2><div style="height:200px"><canvas id="bars"></canvas></div></div>
+    <div class="card note">
+      ${top ? `👉 Eng ko'p pul <b>${top}</b> ga ketdi.<br>` : ""}
+      ${diff !== null ? `O'tgan oyga nisbatan xarajat ${Math.abs(diff)}% ${diff > 0 ? "📈 ko'proq" : "📉 kamroq"}.` : ""}
+    </div>`;
+
+  if (d.c.length) {
+    document.getElementById("cats").innerHTML = d.c.map(([n, v], i) => `
+      <div class="row"><span class="dot" style="background:${COLORS[i % 8]}"></span>
+        <span class="n">${n}</span><span class="a">${fmt(v)} · ${Math.round(v * 100 / d.e)}%</span></div>
+      <div class="track"><div class="fill" style="width:${v * 100 / d.c[0][1]}%;background:${COLORS[i % 8]}"></div></div>`).join("");
+    new Chart(document.getElementById("pie"), {
+      type: "doughnut",
+      data: { labels: d.c.map(x => x[0]), datasets: [{ data: d.c.map(x => x[1]),
+              backgroundColor: COLORS, borderColor: css("--card") || "#1e293b", borderWidth: 3 }] },
+      options: { cutout: "64%", maintainAspectRatio: false, plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: c => ` ${c.label}: ${fmt(c.raw)}` } } } }
+    });
+  }
+  const start = new Date(d.s);
+  const labels = d.d.map((_, i) => new Date(start.getTime() + i * 864e5).getDate());
+  const avg = d.e / Math.max(d.d.filter((_, i) => new Date(start.getTime() + i * 864e5) <= new Date()).length, 1);
+  new Chart(document.getElementById("bars"), {
+    type: "bar",
+    data: { labels, datasets: [{ data: d.d, borderRadius: 4,
+            backgroundColor: d.d.map(v => v > avg * 1.5 ? "#EF4444" : "#10B981") }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false },
+               tooltip: { callbacks: { label: c => " " + fmt(c.raw) } } },
+               scales: { x: { ticks: { color: css("--muted") }, grid: { display: false } },
+                         y: { ticks: { color: css("--muted"), callback: v => short(v) },
+                              grid: { color: "rgba(148,163,184,.15)" } } } }
+  });
+}
+</script>
+</body>
+</html>
