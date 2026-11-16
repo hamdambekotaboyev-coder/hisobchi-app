@@ -1,0 +1,59 @@
+# Shaxsiy Hisobchi botining kunlik xabarlari (vaqtlar UTC; Toshkent = UTC+5)
+name: Hisobchi kunlik xabarlar
+
+on:
+  schedule:
+    - cron: "0 4 * * *"    # 09:00 — tong
+    - cron: "0 8 * * *"    # 13:00 — tushlik
+    - cron: "0 15 * * *"   # 20:00 — kech
+    - cron: "0 17 * * *"   # 22:00 — yozuv bo'lmasa eslatma
+    - cron: "0 19 * * *"   # 00:00 — kunlik hisobot
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "morning | midday | evening | nothing | report"
+        required: true
+        default: midday
+
+permissions:
+  contents: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vaqtni aniqlash
+        id: slot
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 4 * * *")  s=morning ;;
+            "0 8 * * *")  s=midday ;;
+            "0 15 * * *") s=evening ;;
+            "0 17 * * *") s=nothing ;;
+            "0 19 * * *") s=report ;;
+            *)            s="${{ inputs.slot }}" ;;
+          esac
+          echo "slot=$s" >> "$GITHUB_OUTPUT"
+
+      - name: Botga buyruq
+        env:
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          curl -fsS -m 280 -X POST -H "X-Cron-Key: $CRON_KEY" \
+            "https://hamshox.pythonanywhere.com/cron/${{ steps.slot.outputs.slot }}"
+
+      # GitHub 60 kun faoliyatsiz ochiq repodagi jadvalni o'chiradi — oyda bir marta belgi qo'yamiz
+      - uses: actions/checkout@v4
+        if: steps.slot.outputs.slot == 'report'
+      - name: Faollik belgisi
+        if: steps.slot.outputs.slot == 'report'
+        run: |
+          month=$(date -u +%Y-%m)
+          if [ "$(cat last-run.txt 2>/dev/null)" != "$month" ]; then
+            echo "$month" > last-run.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add last-run.txt
+            git commit -m "Faollik: $month"
+            git push
+          fi
